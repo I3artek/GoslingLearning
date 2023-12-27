@@ -54,6 +54,29 @@ def video_feed():
     cap.release()
     cv2.destroyAllWindows()
 
+
+# return an image from a path
+def process_image_internal(file_path):
+    image = cv2.imread(file_path)
+
+    aspect_ratio = image.shape[1] / image.shape[0]
+
+    max_display_width = 800
+    max_display_height = 600
+
+    if aspect_ratio > 1:
+        display_width = min(image.shape[1], max_display_width)
+        display_height = int(display_width / aspect_ratio)
+    else:
+        display_height = min(image.shape[0], max_display_height)
+        display_width = int(display_height * aspect_ratio)
+
+    image = cv2.resize(image, (display_width, display_height))
+    image = detect_faces(image)
+    return image
+
+
+# process an image
 def process_image():
     file_path = filedialog.askopenfilename()
     if file_path:
@@ -61,26 +84,32 @@ def process_image():
         if mime_type is None or not mime_type.startswith('image'):
             messagebox.showerror("Error", "Selected file is not an image")
             return
-        image = cv2.imread(file_path)
-
-        aspect_ratio = image.shape[1] / image.shape[0]
-
-        max_display_width = 800
-        max_display_height = 600
-
-        if aspect_ratio > 1:
-            display_width = min(image.shape[1], max_display_width)
-            display_height = int(display_width / aspect_ratio)
-        else:
-            display_height = min(image.shape[0], max_display_height)
-            display_width = int(display_height * aspect_ratio)
-
-        image = cv2.resize(image, (display_width, display_height))
-        image = detect_faces(image)
-
+        image = process_image_internal(file_path)
         cv2.imshow('Detected Faces', image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
+
+# process image folder
+def process_images_folder():
+    # get gir
+    dir_path = filedialog.askdirectory()
+    if dir_path:
+        file_names = os.listdir(dir_path)
+        # iterate through files
+        for name in file_names:
+            file_path = dir_path + "/" + name
+            # check type
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if mime_type is None or not mime_type.startswith('image'):
+                continue
+            image = process_image_internal(file_path)
+            cv2.imshow('Detected Faces', image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        pass
+
+
 
 def process_video():
     global paused, cap
@@ -130,6 +159,10 @@ def create_gui():
     video_process_button = tk.Button(root, text="Process Video", command=process_video)
     configure_button(video_process_button)
     video_process_button.pack(pady=20)
+
+    images_folder_process_button = tk.Button(root, text="Process Folder with Images", command=process_images_folder)
+    configure_button(images_folder_process_button)
+    images_folder_process_button.pack(pady=20)
 
     root.mainloop()
 
