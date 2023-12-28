@@ -11,6 +11,13 @@ import os
 paused = False
 saved_frames_count = 0
 
+# wrapper function for the whole process image -> number
+# image is a cropped face
+def calculate_age(image):
+    # mockup version
+    return 7
+
+
 def remove_bounded_images_folder():
     bounded_images_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'boundedImages')
     if os.path.exists(bounded_images_folder):
@@ -29,10 +36,14 @@ def detect_faces(image):
 
     for i, (x, y, w, h) in enumerate(faces):
         bounded_image = image[y:y+h, x:x+w]
+
+        # to trzeba w odpowiednie miejsce przeniesc, bo ja nwm gdzie sie to croppuje
+        age = calculate_age(bounded_image)
+
         cv2.imwrite(f'{bounded_images_folder}/video_frame_{saved_frames_count}_face_{i}.png', bounded_image)
 
         cv2.rectangle(image, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        cv2.putText(image, "Age: ", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+        cv2.putText(image, f"Age: {age}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
 
     saved_frames_count += 1
     return image
