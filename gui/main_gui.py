@@ -97,7 +97,9 @@ def process_image():
             return
         image = process_image_internal(file_path)
         cv2.imshow('Detected Faces', image)
-        cv2.waitKey(0)
+        while cv2.waitKey(1000) < 0:
+            if cv2.getWindowProperty('Detected Faces', cv2.WND_PROP_VISIBLE) < 1:
+                break
         cv2.destroyAllWindows()
 
 
