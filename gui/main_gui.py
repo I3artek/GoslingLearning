@@ -67,15 +67,11 @@ def predict(model, image_tensor):
 
 model = load_model('resnet18_prep1_checkpoint_epoch_lowest.pth')
 
-def calculate_age(image):
-    return predict(model, preprocess_image(preprocess(image)))
 
 # wrapper function for the whole process image -> number
 # image is a cropped face
 def calculate_age(image):
-    # mockup version
-    return 7
-
+    return predict(model, preprocess_image(preprocess(image)))
 
 def remove_bounded_images_folder():
     bounded_images_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'boundedImages')
