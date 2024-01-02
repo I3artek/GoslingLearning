@@ -106,18 +106,20 @@ def process_images_folder():
     # get gir
     dir_path = filedialog.askdirectory()
     if dir_path:
+        # create directory for results
+        results_dir = f"{dir_path}_results"
+        os.mkdir(results_dir)
         file_names = os.listdir(dir_path)
         # iterate through files
         for name in file_names:
-            file_path = dir_path + "/" + name
+            file_path = os.path.join(dir_path, name)
             # check type
             mime_type, _ = mimetypes.guess_type(file_path)
             if mime_type is None or not mime_type.startswith('image'):
                 continue
             image = process_image_internal(file_path)
-            cv2.imshow('Detected Faces', image)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            # save the image
+            cv2.imwrite(os.path.join(results_dir, name), image)
         pass
 
 
