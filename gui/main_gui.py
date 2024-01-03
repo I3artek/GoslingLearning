@@ -22,6 +22,10 @@ right_eye_utk = (135, 59)
 distance_utk = right_eye_utk[0] - left_eye_utk[0]
 utk_midpoint = ((left_eye_utk[0] + right_eye_utk[0]) // 2, (left_eye_utk[1] + right_eye_utk[1]) // 2)
 
+atoi_map = [str(x) for x in range(1, 91)]
+atoi_map.sort()
+atoi_map = [int(x) for x in atoi_map]
+
 
 # wrapper function for the whole process image -> number
 # image is a cropped face
@@ -63,9 +67,12 @@ def predict(model, image_tensor):
     with torch.no_grad():
         outputs = model(image_tensor).numpy()
         outputs = softmax(outputs)
-        return np.sum(np.multiply(outputs, np.arange(1, 91))).astype(np.int8)
+        return np.sum(np.multiply(outputs, atoi_map)).astype(np.int8)
+        #_, predicted = torch.max(outputs, 1)
 
-model = load_model('resnet18_prep1_checkpoint_epoch_lowest.pth')
+        #return atoi_map[predicted.item()]
+
+model = load_model('./checkpoints/resnet18_prep1aug1_checkpoint_epoch_9.pth')
 
 
 # wrapper function for the whole process image -> number
@@ -119,43 +126,31 @@ def align_and_resize_face(image, output_size=(200, 200)):
         return image
 
 
-def align_with_point_and_resize(image, imagePoint, utkPoint):
-    dX = utkPoint[0] - imagePoint[0]
-    dY = utkPoint[1] - imagePoint[1]
-    new_img = np.zeros((200, 200, image.shape[2]), dtype=np.uint8)
-    for x in range(200):
-        for y in range(200):
-            src_x = x - dX
-            src_y = y - dY
-            # Ensure the source coordinates are within the image boundaries
-            if 0 <= src_x < image.shape[0] and 0 <= src_y < image.shape[1]:
-                new_img[x, y] = image[src_x, src_y]
-    return new_img
 
-def align_with_point(image, imagePoint, utkPoint):
-    dX = utkPoint[0] - imagePoint[0]
-    dY = utkPoint[1] - imagePoint[1]
-    new_img = np.zeros((200, 200, image.shape[2]), dtype=np.uint8)
-    for x in range(200):
-        for y in range(200):
-            src_x = x - dX
-            src_y = y - dY
-            # Ensure the source coordinates are within the image boundaries
-            if 0 <= src_x < image.shape[0] and 0 <= src_y < image.shape[1]:
-                new_img[x, y] = image[src_x, src_y]
-    return new_img
+
+def align_with_point(image, utkPoint, imagePoint):
+    dX = imagePoint[0] - utkPoint[0]
+    dY = imagePoint[1] - utkPoint[1]
+    new_image = np.zeros((200, 200, 3), dtype=np.uint8)
+
+    for i in range(200):
+        for j in range(200):
+            if i + dY < image.shape[0] and j + dX < image.shape[1] and i + dY >= 0 and j + dX >= 0:
+                new_image[i][j] = image[i + dY][j + dX]
+            else:
+                new_image[i][j] = 0
+    return new_image
 
 
 def align_bartek(x, y, w, h, image, outputSize = (200, 200)) :
     face_unchanged = image[y:y + h, x:x + w]
     gray = cv2.cvtColor(face_unchanged, cv2.COLOR_BGR2GRAY)
-    eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=15, minSize=(30, 30))
+    eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
     if len(eyes) == 2:
         (x1, y1, w1, h1), (x2, y2, w2, h2) = eyes[:2]
         # Calculate the center of each eye
         eye1_center = (x + x1 + w1 // 2, y + y1 + h1 // 2)
         eye2_center = (x + x2 + w2 // 2, y + y2 + h2 // 2)
-
         # check left and right eye
         left_eye_center = eye1_center if eye1_center[0] < eye2_center[0] else eye2_center
         right_eye_center = eye1_center if eye1_center[0] > eye2_center[0] else eye2_center
@@ -168,22 +163,18 @@ def align_bartek(x, y, w, h, image, outputSize = (200, 200)) :
         M = cv2.getRotationMatrix2D(eyes_center, angle, 1.0)
         rotated_image = cv2.warpAffine(image, M, (image.shape[1], image.shape[0]), flags=cv2.INTER_CUBIC)
         #cv2.imshow('Rotated Image', rotated_image)
-        
         # scale
         distance = np.sqrt((right_eye_center[0] - left_eye_center[0]) ** 2 + (right_eye_center[1] - left_eye_center[1]) ** 2)
         scale = distance_utk / distance
         scaled_image = cv2.resize(rotated_image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         #cv2.imshow('Scaled Image', scaled_image)
-
+        left_eye_center = (int(left_eye_center[0] * scale), int(left_eye_center[1] * scale))
         # move to left eye
-        transformed_image = align_with_point_and_resize(scaled_image, left_eye_center, left_eye_utk)
+        transformed_image = align_with_point(scaled_image, left_eye_utk, left_eye_center)
         cv2.imshow('Transformed Image', transformed_image)
-        #result_image = transformed_image[0:200, 0:200]
-        #cv2.imshow('result', result_image)
         return transformed_image
     else:
         return cv2.resize(face_unchanged, outputSize, interpolation=cv2.INTER_AREA)
-
 
 
 def process_frame(image):
@@ -202,8 +193,8 @@ def process_frame(image):
         #    cv2.rectangle(image, (x+ex, y+ey), (x+ex+ew, y+ey+eh), (0, 255, 0), 2)
 
         # align face and calculate age
-        aligned_face_resized = align_and_resize_face(image[y:y + h, x:x + w])
-        #aligned_face_resized = align_bartek(x, y, w, h, image)
+        #aligned_face_resized = align_and_resize_face(image[y:y + h, x:x + w])
+        aligned_face_resized = align_bartek(x, y, w, h, image)
         aligned_pil = Image.fromarray(aligned_face_resized)
         age = calculate_age(aligned_pil)
 
