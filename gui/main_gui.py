@@ -19,6 +19,7 @@ paused = False
 saved_frames_count = 0
 left_eye_utk = (57, 59)
 right_eye_utk = (135, 59)
+mouth_utk = (97, 155)
 distance_utk = right_eye_utk[0] - left_eye_utk[0]
 utk_midpoint = ((left_eye_utk[0] + right_eye_utk[0]) // 2, (left_eye_utk[1] + right_eye_utk[1]) // 2)
 
@@ -88,6 +89,8 @@ def remove_bounded_images_folder():
 # loading the classifiers with respected files
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
+mouth_cascade = cv2.CascadeClassifier("./haarcascade_mcs_mouth.xml")
+
 
 def get_faces_from_image(gray):
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=15)
@@ -126,54 +129,83 @@ def align_and_resize_face(image, output_size=(200, 200)):
         return image
 
 
-
-
 def align_with_point(image, utkPoint, imagePoint):
     dX = imagePoint[0] - utkPoint[0]
     dY = imagePoint[1] - utkPoint[1]
-    new_image = np.zeros((200, 200, 3), dtype=np.uint8)
 
-    for i in range(200):
-        for j in range(200):
-            if i + dY < image.shape[0] and j + dX < image.shape[1] and i + dY >= 0 and j + dX >= 0:
-                new_image[i][j] = image[i + dY][j + dX]
-            else:
-                new_image[i][j] = 0
+    new_image = np.zeros((200, 200, 3), dtype=np.uint8)
+    n, m = image.shape[:2]
+    N, M = new_image.shape[:2]
+    # we need 0<=i<N, 0<=j<M, 0<=i+dY<n, 0<=j+dX<m
+    # that's equivalent to:
+    # max(0,-dY)<=i<min(N,n-dY), max(0,-dX)<=j<min(M,m-dX)
+    # so:
+    new_image[max(0, -dY):min(N, n - dY), max(0, -dX):min(M, m - dX)] = image[max(dY, 0):min(N + dY, n),
+                                                                        max(dX, 0):min(M + dX, m)]
     return new_image
 
 
-def align_bartek(x, y, w, h, image, outputSize = (200, 200)) :
+def align_bartek(x, y, w, h, image, outputSize=(200, 200)):
     face_unchanged = image[y:y + h, x:x + w]
-    gray = cv2.cvtColor(face_unchanged, cv2.COLOR_BGR2GRAY)
-    eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+    # Divide the image
+    gray_top = image[y:y + h // 2, x:x + w]
+    gray_bottom = image[y + 2 * h // 3:y + h, x:x + w]
+
+    eyes = eye_cascade.detectMultiScale(gray_top, scaleFactor=1.02, minNeighbors=8, minSize=(25, 25))
+    mouths = mouth_cascade.detectMultiScale(gray_bottom, scaleFactor=1.1, minNeighbors=8, minSize=(30, 50))
+
     if len(eyes) == 2:
         (x1, y1, w1, h1), (x2, y2, w2, h2) = eyes[:2]
         # Calculate the center of each eye
-        eye1_center = (x + x1 + w1 // 2, y + y1 + h1 // 2)
-        eye2_center = (x + x2 + w2 // 2, y + y2 + h2 // 2)
-        # check left and right eye
-        left_eye_center = eye1_center if eye1_center[0] < eye2_center[0] else eye2_center
-        right_eye_center = eye1_center if eye1_center[0] > eye2_center[0] else eye2_center
+        eye_centers = [(x + x1 + w1 // 2, y + y1 + h1 // 2), (x + x2 + w2 // 2, y + y2 + h2 // 2)]
+        eye_centers.sort()  # Sorts the eye centers based on x-coordinate
 
-        # rotate
+        left_eye_center = eye_centers[0]
+        right_eye_center = eye_centers[1]
+        distance = np.sqrt(
+            (right_eye_center[0] - left_eye_center[0]) ** 2 + (right_eye_center[1] - left_eye_center[1]) ** 2)
+
+        # Rotate so eye centers are aligned
         dY = right_eye_center[1] - left_eye_center[1]
         dX = right_eye_center[0] - left_eye_center[0]
+
         angle = np.degrees(np.arctan2(dY, dX))
-        eyes_center = ((float)(left_eye_center[0] + right_eye_center[0]) // 2, (float)(left_eye_center[1] + right_eye_center[1]) // 2)
+        eyes_center = (
+        (float)(left_eye_center[0] + right_eye_center[0]) // 2, (float)(left_eye_center[1] + right_eye_center[1]) // 2)
         M = cv2.getRotationMatrix2D(eyes_center, angle, 1.0)
         rotated_image = cv2.warpAffine(image, M, (image.shape[1], image.shape[0]), flags=cv2.INTER_CUBIC)
-        #cv2.imshow('Rotated Image', rotated_image)
-        # scale
-        distance = np.sqrt((right_eye_center[0] - left_eye_center[0]) ** 2 + (right_eye_center[1] - left_eye_center[1]) ** 2)
+        #cv2.imshow('Rotated', rotated_image)
+        cv2.imwrite(f'boundedImages/rotated_image_{saved_frames_count}.png', rotated_image)
+
+        # Scale so distance between eyes is the same as in utk
         scale = distance_utk / distance
         scaled_image = cv2.resize(rotated_image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-        #cv2.imshow('Scaled Image', scaled_image)
+        #cv2.imshow('Scaled', scaled_image)
+
+        cv2.imwrite(f'boundedImages/scaled_image_{saved_frames_count}.png', scaled_image)
+
         left_eye_center = (int(left_eye_center[0] * scale), int(left_eye_center[1] * scale))
-        # move to left eye
+        # Move so left eye is in the same place as in utk
         transformed_image = align_with_point(scaled_image, left_eye_utk, left_eye_center)
-        cv2.imshow('Transformed Image', transformed_image)
+        cv2.imwrite(f'boundedImages/transformed_image_{saved_frames_count}.png', transformed_image)
+        cv2.imshow('Transformed', transformed_image)
         return transformed_image
     else:
+        # If we had 1 mouth then we can try to align with it
+        if len(mouths) == 1:
+            mouth_center = (x + mouths[0][0] + mouths[0][2] // 2, y + mouths[0][1] + mouths[0][3] // 2 + 2 * h // 3)
+            transformed_image = align_with_point(image, mouth_utk, mouth_center)
+            return transformed_image
+        elif len(mouths) == 0:
+            # Try to move the whole image 20 pixels down and detect mouth again
+            gray_bottom = image[y + h // 2 + 20:y + h + 20, x:x + w]
+            mouths = mouth_cascade.detectMultiScale(gray_bottom, scaleFactor=1.1, minNeighbors=15, minSize=(30, 50))
+            if len(mouths) == 1:
+                mouth_center = (
+                x + mouths[0][0] + mouths[0][2] // 2, y + mouths[0][1] + mouths[0][3] // 2 + 2 * h // 3 + 20)
+                transformed_image = align_with_point(image, mouth_utk, mouth_center)
+                return transformed_image
         return cv2.resize(face_unchanged, outputSize, interpolation=cv2.INTER_AREA)
 
 
@@ -186,25 +218,25 @@ def process_frame(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     faces = get_faces_from_image(gray)
 
+    face_rectangles = []
+    face_ages = []
+
     for i, (x, y, w, h) in enumerate(faces):
-
-        # for (ex, ey, ew, eh) in eyes:
-        #    # Draw rectangles around the detected eyes
-        #    cv2.rectangle(image, (x+ex, y+ey), (x+ex+ew, y+ey+eh), (0, 255, 0), 2)
-
-        # align face and calculate age
-        #aligned_face_resized = align_and_resize_face(image[y:y + h, x:x + w])
         aligned_face_resized = align_bartek(x, y, w, h, image)
         aligned_pil = Image.fromarray(aligned_face_resized)
         age = calculate_age(aligned_pil)
 
-        # save aligned face image
-        cv2.imwrite(f'{bounded_images_folder}/video_frame_{saved_frames_count}_face_{i}.png', aligned_face_resized)
+        face_rectangles.append((x, y, x + w, y + h))
+        face_ages.append(age)
 
-        # Draw rectangle around detected face and put age as text
-        cv2.rectangle(image, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        cv2.putText(image, f"Age: {age}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+    for (x1, y1, x2, y2), age in zip(face_rectangles, face_ages):
+        cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        if (y1 > 30):
+            cv2.putText(image, f"{age}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+        else:
+            cv2.putText(image, f"{age}", (x1, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
 
+    cv2.imwrite(f'{bounded_images_folder}/video_frame_{saved_frames_count}.png', image)
     saved_frames_count += 1
     return image
 
@@ -322,7 +354,7 @@ def create_gui():
     root.geometry("800x600")
 
     def configure_button(button):
-        button.config(font=('Comic Sans MS', 20), bg='blue', fg='white', padx=20, pady=10)
+        button.config(font=('Arial', 20), bg='blue', fg='white', padx=20, pady=10)
 
     video_button = tk.Button(root, text="Start Video Feed", command=video_feed)
     configure_button(video_button)
