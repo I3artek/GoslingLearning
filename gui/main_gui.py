@@ -11,7 +11,6 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
-import dlib
 
 
 
@@ -242,6 +241,11 @@ def process_frame(image):
 
 
 def video_feed():
+    # Create a window with the resizable flag
+    cv2.namedWindow('Video Feed', cv2.WINDOW_NORMAL)
+
+    # Set the initial size of the window
+    cv2.resizeWindow('Video Feed', 640, 480)
     cap = cv2.VideoCapture(0)
     while True:
         ret, frame = cap.read()
@@ -250,8 +254,10 @@ def video_feed():
 
         frame = process_frame(frame)
         cv2.imshow('Video Feed', frame)
-
-        key = cv2.waitKey(1)
+        # Set the desired framerate
+        framerate = 10
+        delay = 1000 / framerate  # in milliseconds
+        key = cv2.waitKey(delay)
         if key == ord('q') or cv2.getWindowProperty('Video Feed', cv2.WND_PROP_VISIBLE) < 1:
             break
 
