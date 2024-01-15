@@ -255,8 +255,8 @@ def video_feed():
         frame = process_frame(frame)
         cv2.imshow('Video Feed', frame)
         # Set the desired framerate
-        framerate = 10
-        delay = 1000 / framerate  # in milliseconds
+        framerate = 1
+        delay = int(1000 / framerate)  # in milliseconds
         key = cv2.waitKey(delay)
         if key == ord('q') or cv2.getWindowProperty('Video Feed', cv2.WND_PROP_VISIBLE) < 1:
             break
