@@ -335,6 +335,17 @@ def process_video():
             messagebox.showerror("Error", "Selected file is not a video")
             return
         cap = cv2.VideoCapture(file_path)
+
+        # Get video properties
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+
+        # Define the output file and create a VideoWriter object with the same codec
+        output_file = file_path.replace('.', '_result.')
+        out = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
+
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -343,6 +354,7 @@ def process_video():
             if not paused:
                 frame = process_frame(frame)
                 cv2.imshow('Detected Faces (Press "q" to exit, "p" to pause/resume)', frame)
+                out.write(frame)
 
             key = cv2.waitKey(1)
             if key == ord('q') or cv2.getWindowProperty('Detected Faces (Press "q" to exit, "p" to pause/resume)',
@@ -352,6 +364,7 @@ def process_video():
                 paused = not paused
 
         cap.release()
+        out.release()
         cv2.destroyAllWindows()
 
 def create_gui():
