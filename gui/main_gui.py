@@ -67,7 +67,7 @@ def preprocess_image(image):
     # transform = transforms.ToTensor()
     transform = transforms.Compose([
          transforms.Resize((206, 206)),
-         # transforms.Grayscale(),
+         transforms.Grayscale(),
          transforms.ToTensor(),
      ])
     image = transform(image).unsqueeze(0)
@@ -86,7 +86,7 @@ def predict(model, image_tensor):
 
 
 # let's load the model so we can have it as a global variable
-model = load_model('./checkpoints/resnet18_prep1aug1_checkpoint_epoch_9.pth')
+model = load_model('model.pth')
 
 
 # wrapper function for the whole process image -> number
@@ -124,7 +124,7 @@ def align_with_point(image, utkPoint, imagePoint):
     dX = imagePoint[0] - utkPoint[0]
     dY = imagePoint[1] - utkPoint[1]
 
-    new_image = np.zeros((200, 200), dtype=np.uint8)
+    new_image = np.zeros((200, 200, 3), dtype=np.uint8)
     n, m = image.shape[:2]
     N, M = new_image.shape[:2]
     # we need 0<=i<N, 0<=j<M, 0<=i+dY<n, 0<=j+dX<m
@@ -144,12 +144,12 @@ def check_scale(image_width, distance):
     return True
 
 
-def align_bartek(x, y, w, h, image, outputSize=(200, 200)):
+def align_bartek(x, y, w, h, gray_image, original_image, outputSize=(200, 200)):
     """Align the photo so that it matches utk face."""
-    face_unchanged = image[y:y + h, x:x + w]
+    face_unchanged = original_image[y:y + h, x:x + w]
 
     # Divide the image
-    gray_top = image[y:y + h // 2, x:x + w]
+    gray_top = gray_image[y:y + h // 2, x:x + w]
 
     # detect the eyes
     eyes = eye_cascade.detectMultiScale(gray_top, scaleFactor=1.02,
@@ -179,8 +179,8 @@ def align_bartek(x, y, w, h, image, outputSize=(200, 200)):
             eyes_center = ((float)(left_eye_center[0] + right_eye_center[0]) // 2,
                            (float)(left_eye_center[1] + right_eye_center[1]) // 2)
             M = cv2.getRotationMatrix2D(eyes_center, angle, 1.0)
-            rotated_image = cv2.warpAffine(image, M,
-                                           (image.shape[1], image.shape[0]),
+            rotated_image = cv2.warpAffine(original_image, M,
+                                           (original_image.shape[1], original_image.shape[0]),
                                            flags=cv2.INTER_CUBIC)
             # cv2.imshow('Rotated', rotated_image)
             # cv2.imwrite(f'boundedImages/rotated_image_{saved_frames_count}.png',
@@ -206,8 +206,8 @@ def align_bartek(x, y, w, h, image, outputSize=(200, 200)):
             # cv2.imshow('Transformed', transformed_image)
             return transformed_image
 
-    # if we don't have exactly two eyes
-    gray_bottom = image[y + 2 * h // 3:y + h, x:x + w]
+    # if we don't have exactly two eyes we check the bottom third of the image
+    gray_bottom = gray_image[y + 2 * h // 3:y + h, x:x + w]
     # detect the mouth
     mouths = mouth_cascade.detectMultiScale(gray_bottom, scaleFactor=1.1,
                                             minNeighbors=8, minSize=(30, 50))
@@ -215,26 +215,9 @@ def align_bartek(x, y, w, h, image, outputSize=(200, 200)):
         # if we have one mouth then we can try to align with it
         mouth_center = (x + mouths[0][0] + mouths[0][2] // 2,
                         y + mouths[0][1] + mouths[0][3] // 2 + 2 * h // 3)
-        transformed_image = align_with_point(image,
+        transformed_image = align_with_point(original_image,
                                              mouth_utk, mouth_center)
         return transformed_image
-    if len(mouths) == 0:
-        # if there are no mouths
-        # Try to move the whole image 20 pixels down and detect mouth again
-        gray_bottom = image[y + h // 2 + 20:y + h + 20, x:x + w]
-        mouths = mouth_cascade.detectMultiScale(gray_bottom,
-                                                scaleFactor=1.1,
-                                                minNeighbors=15,
-                                                minSize=(30, 50))
-        if len(mouths) == 1:
-            # if there is one mouth
-            mouth_center = (
-                x + mouths[0][0] + mouths[0][2] // 2,
-                y + mouths[0][1] + mouths[0][3] // 2 + 2 * h // 3 + 20)
-            transformed_image = align_with_point(image,
-                                                 mouth_utk,
-                                                 mouth_center)
-            return transformed_image
     # any other case
     return cv2.resize(face_unchanged, outputSize,
                       interpolation=cv2.INTER_AREA)
@@ -255,7 +238,7 @@ def process_frame(image):
     face_ages = []
 
     for i, (x, y, w, h) in enumerate(faces):
-        aligned_face_resized = align_bartek(x, y, w, h, gray)
+        aligned_face_resized = align_bartek(x, y, w, h, gray, image)
         aligned_pil = Image.fromarray(aligned_face_resized)
         age = calculate_age(aligned_pil)
 
@@ -379,7 +362,7 @@ def process_video():
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
         # Define the output file and create a VideoWriter object with the same codec
         output_file = file_path.replace('.', '_result.')
