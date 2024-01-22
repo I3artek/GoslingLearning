@@ -36,6 +36,11 @@ atoi_map = [str(x) for x in range(1, 91)]
 atoi_map.sort()
 atoi_map = [int(x) for x in atoi_map]
 
+# hardcoded biases
+biases = [0,0,1,0,-1,0,-1,-2,-2,0,1,0,2,-1,3,2,2,3,1,1,2,
+          3,0,0,1,0,-2,2,-1,0,0,0,1,1,4,3,-1,1,0,-2,1,2,
+          2,3,2,3,0,-3,0,5,4,3,2,1,1,0,2,3,8,8,3,5,6,2,
+          1,4,1,-1,0,-1,-1,0,0,4,3,0,1,9,2,0,-6,0,-2,1,1,-1,-2,0,0,0]
 
 def load_model(model_path):
     """Load the desired model."""
@@ -79,10 +84,8 @@ def predict(model, image_tensor):
     with torch.no_grad():
         outputs = model(image_tensor).numpy()
         outputs = softmax(outputs)
-        return np.sum(np.multiply(outputs, atoi_map)).astype(np.int8)
-        # _, predicted = torch.max(outputs, 1)
-
-        # return atoi_map[predicted.item()]
+        entry_pred = np.sum(np.multiply(outputs, [int(x) for x in atoi_map])).astype(np.int8)
+        return entry_pred - biases[entry_pred - 1]
 
 
 # let's load the model so we can have it as a global variable
