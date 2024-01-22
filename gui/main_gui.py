@@ -118,7 +118,7 @@ mouth_cascade = cv2.CascadeClassifier("./haarcascade_mcs_mouth.xml")
 def get_faces_from_image(gray):
     """Detect faces in a grayscale image."""
     faces = face_cascade.detectMultiScale(
-        gray, scaleFactor=1.1, minNeighbors=25)
+        gray, scaleFactor=1.1, minNeighbors=15)
     return faces
 
 
