@@ -15,10 +15,8 @@ from PIL import Image
 
 # some global variables
 
-# some state I guess?
+# state of the video
 paused = False
-# count of frames for something?
-saved_frames_count = 0
 # in the next lines the coordinates denote the central point of each object
 # average coordinates of left eye in utk faces
 left_eye_utk = (57, 59)
@@ -31,7 +29,8 @@ distance_utk = right_eye_utk[0] - left_eye_utk[0]
 # midpoint of the eyes
 utk_midpoint = ((left_eye_utk[0] + right_eye_utk[0]) // 2,
                 (left_eye_utk[1] + right_eye_utk[1]) // 2)
-# some magic with maps (?)
+
+# sorting neurons (so they are sorted by age, not lexicographically)
 atoi_map = [str(x) for x in range(1, 91)]
 atoi_map.sort()
 atoi_map = [int(x) for x in atoi_map]
@@ -69,7 +68,6 @@ def softmax(x):
 
 def preprocess_image(image):
     """Preprocess an image so that it's suitable for our model."""
-    # transform = transforms.ToTensor()
     transform = transforms.Compose([
          transforms.Resize((206, 206)),
          transforms.Grayscale(),
@@ -130,9 +128,9 @@ def align_with_point(image, utkPoint, imagePoint):
     new_image = np.zeros((200, 200, 3), dtype=np.uint8)
     n, m = image.shape[:2]
     N, M = new_image.shape[:2]
-    # we need 0<=i<N, 0<=j<M, 0<=i+dY<n, 0<=j+dX<m
+    # we need 0 <= i < N, 0 <= j < M, 0 <= i + dY < n, 0 <= j + dX < m
     # that's equivalent to:
-    # max(0,-dY)<=i<min(N,n-dY), max(0,-dX)<=j<min(M,m-dX)
+    # max(0, -dY) <= i < min(N, n - dY), max(0, -dX) <= j < min(M, m - dX)
     # so:
     new_image[max(0, -dY):min(N, n - dY),
               max(0, -dX):min(M, m - dX)] = image[max(dY, 0):min(N + dY, n),
@@ -185,28 +183,16 @@ def align_bartek(x, y, w, h, gray_image, original_image, outputSize=(200, 200)):
             rotated_image = cv2.warpAffine(original_image, M,
                                            (original_image.shape[1], original_image.shape[0]),
                                            flags=cv2.INTER_CUBIC)
-            # cv2.imshow('Rotated', rotated_image)
-            # cv2.imwrite(f'boundedImages/rotated_image_{saved_frames_count}.png',
-            #            rotated_image)
 
             # Scale so distance between eyes is the same as in utk
             scale = distance_utk / distance
             scaled_image = cv2.resize(rotated_image, None, fx=scale,
                                       fy=scale, interpolation=cv2.INTER_CUBIC)
-            # cv2.imshow('Scaled', scaled_image)
-
-            # cv2.imwrite(f'boundedImages/scaled_image_{saved_frames_count}.png',
-            #            scaled_image)
-
             left_eye_center = (int(left_eye_center[0] * scale),
                                int(left_eye_center[1] * scale))
             # Move so left eye is in the same place as in utk
             transformed_image = align_with_point(scaled_image,
                                                  left_eye_utk, left_eye_center)
-            # cv2.imwrite(
-            #    f'boundedImages/transformed_image_{saved_frames_count}.png',
-            #    transformed_image)
-            # cv2.imshow('Transformed', transformed_image)
             return transformed_image
 
     # if we don't have exactly two eyes we check the bottom third of the image
@@ -228,12 +214,6 @@ def align_bartek(x, y, w, h, gray_image, original_image, outputSize=(200, 200)):
 
 def process_frame(image):
     """Process one frame."""
-    # global saved_frames_count
-    # bounded_images_folder = os.path.join(
-    #    os.path.dirname(os.path.abspath(__file__)), 'boundedImages')
-    # if not os.path.exists(bounded_images_folder):
-    #    os.makedirs(bounded_images_folder)
-
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     faces = get_faces_from_image(gray)
 
@@ -256,10 +236,6 @@ def process_frame(image):
         else:
             cv2.putText(image, f"{age}", (x1, y2 + 20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
-
-    # cv2.imwrite(
-    #    f'{bounded_images_folder}/video_frame_{saved_frames_count}.png', image)
-    # saved_frames_count += 1
     return image
 
 
@@ -329,7 +305,7 @@ def process_image():
 
 def process_images_folder():
     """Process all images in a directory."""
-    # get gir
+    # get dir
     dir_path = filedialog.askdirectory()
     if dir_path:
         # create directory for results
@@ -361,6 +337,12 @@ def process_video():
             return
         cap = cv2.VideoCapture(file_path)
 
+        # Create a window with the resizable flag
+        cv2.namedWindow('Video Feed', cv2.WINDOW_NORMAL)
+
+        # Set the initial size of the window
+        cv2.resizeWindow('Video Feed', 640, 480)
+
         # Get video properties
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -378,14 +360,12 @@ def process_video():
 
             if not paused:
                 frame = process_frame(frame)
-                cv2.imshow(
-                    'Detected Faces (Press "q" to exit, "p" to pause/resume)',
-                    frame)
+                cv2.imshow('Video Feed', frame)
                 out.write(frame)
 
             key = cv2.waitKey(1)
             if key == ord('q') or cv2.getWindowProperty(
-                    'Detected Faces (Press "q" to exit, "p" to pause/resume)',
+                    'Video Feed',
                     cv2.WND_PROP_VISIBLE) < 1:
                 break
             elif key == ord('p'):
