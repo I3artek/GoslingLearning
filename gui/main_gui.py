@@ -147,7 +147,6 @@ def check_scale(image_width, distance):
 
 def align_bartek(x, y, w, h, gray_image, original_image, outputSize=(200, 200)):
     """Align the photo so that it matches utk face."""
-    face_unchanged = original_image[y:y + h, x:x + w]
 
     # Divide the image
     gray_top = gray_image[y:y + h // 2, x:x + w]
@@ -208,6 +207,7 @@ def align_bartek(x, y, w, h, gray_image, original_image, outputSize=(200, 200)):
                                              mouth_utk, mouth_center)
         return transformed_image
     # any other case
+    face_unchanged = original_image[y:y + h, x:x + w]
     return cv2.resize(face_unchanged, outputSize,
                       interpolation=cv2.INTER_AREA)
 
@@ -308,6 +308,7 @@ def process_images_folder():
     # get dir
     dir_path = filedialog.askdirectory()
     if dir_path:
+        cv2.namedWindow("Don't close this window!", cv2.WINDOW_NORMAL)
         # create directory for results
         results_dir = f"{dir_path}_results"
         os.mkdir(results_dir)
@@ -322,6 +323,7 @@ def process_images_folder():
             image = process_image_internal(file_path)
             # save the image
             cv2.imwrite(os.path.join(results_dir, name), image)
+        cv2.destroyAllWindows()
         pass
 
 
