@@ -87,7 +87,7 @@ def predict(model, image_tensor):
 
 
 # let's load the model so we can have it as a global variable
-model = load_model('model.pth')
+model = load_model('../model/model.pth')
 
 
 # wrapper function for the whole process image -> number
