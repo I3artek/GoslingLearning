@@ -19,7 +19,7 @@ the original with result at the end of its name.
 Processes a folder containing images, returns a new folder with predicted ages,
 and identified faces. The new folder is in the same directory as the one chosen
 for the analysis.
-# How tu run
+# How to run
 ### Prerequisites
 - Python3.10 or newer
 - Pip3
